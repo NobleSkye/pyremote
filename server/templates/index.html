@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Command Center</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 5px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .tab-content {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        input[type="text"], input[type="file"], textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a6f);
+        }
+
+        .clients-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .client-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .client-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .client-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .client-status.online {
+            background: #4caf50;
+            color: white;
+        }
+
+        .client-status.offline {
+            background: #f44336;
+            color: white;
+        }
+
+        .command-item {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .command-item h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .command-item code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .execute-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .execute-form select {
+            flex: 1;
+        }
+
+        .console {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .console-line {
+            margin-bottom: 5px;
+        }
+
+        .console-line.error {
+            color: #f44336;
+        }
+
+        .console-line.success {
+            color: #4caf50;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .file-upload {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-list {
+            margin-top: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Remote Command Center</h1>
+            <p>Manage your remote systems from anywhere</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('dashboard')">Dashboard</button>
+            <button class="tab" onclick="showTab('commands')">Commands</button>
+            <button class="tab" onclick="showTab('scripts')">Scripts</button>
+            <button class="tab" onclick="showTab('files')">Files</button>
+            <button class="tab" onclick="showTab('console')">Console</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <h2>Connected Clients</h2>
+            <div id="clients-list" class="clients-grid"></div>
+        </div>
+
+        <!-- Commands Tab -->
+        <div id="commands" class="tab-content">
+            <div class="grid-2">
+                <div>
+                    <h2>Add New Command</h2>
+                    <form id="command-form">
+                        <div class="form-group">
+                            <label for="command-name">Command Name</label>
+                            <input type="text" id="command-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="command-text">Command</label>
+                            <textarea id="command-text" rows="3" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="command-desc">Description</label>
+                            <input type="text" id="command-desc">
+                        </div>
+                        <button type="submit" class="btn">Save Command</button>
+                    </form>
+                </div>
+                <div>
+                    <h2>Saved Commands</h2>
+                    <div id="commands-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scripts Tab -->
+        <div id="scripts" class="tab-content">
+            <div class="grid-2">
+                <div>
+                    <h2>Add New Script</h2>
+                    <form id="script-form">
+                        <div class="form-group">
+                            <label for="script-name">Script Name</label>
+                            <input type="text" id="script-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="script-language">Language</label>
+                            <select id="script-language">
+                                <option value="bash">Bash</option>
+                                <option value="python">Python</option>
+                                <option value="powershell">PowerShell</option>
+                                <option value="batch">Batch</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="script-content">Script Content</label>
+                            <textarea id="script-content" rows="10" required></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="script-desc">Description</label>
+                            <input type="text" id="script-desc">
+                        </div>
+                        <button type="submit" class="btn">Save Script</button>
+                    </form>
+                </div>
+                <div>
+                    <h2>Saved Scripts</h2>
+                    <div id="scripts-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div id="files" class="tab-content">
+            <h2>File Management</h2>
+            <div class="file-upload">
+                <input type="file" id="file-input" multiple style="display: none;">
+                <p>📁 Drop files here or <button class="btn" onclick="document.getElementById('file-input').click()">Choose Files</button></p>
+            </div>
+            <div class="file-list" id="files-list"></div>
+        </div>
+
+        <!-- Console Tab -->
+        <div id="console" class="tab-content">
+            <h2>Live Console</h2>
+            <div class="form-group">
+                <label for="console-client">Select Client</label>
+                <select id="console-client"></select>
+            </div>
+            <div class="form-group">
+                <label for="console-command">Command</label>
+                <input type="text" id="console-command" placeholder="Enter command to execute...">
+                <button class="btn" onclick="executeCommand()" style="margin-top: 10px;">Execute</button>
+            </div>
+            <div id="console-output" class="console"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let clients = [];
+        let commands = [];
+        let scripts = [];
+        let files = [];
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadClients();
+            loadCommands();
+            loadScripts();
+            loadFiles();
+            
+            // Form handlers
+            document.getElementById('command-form').addEventListener('submit', saveCommand);
+            document.getElementById('script-form').addEventListener('submit', saveScript);
+            document.getElementById('file-input').addEventListener('change', uploadFiles);
+            document.getElementById('console-command').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    executeCommand();
+                }
+            });
+        });
+
+        // Socket event handlers
+        socket.on('command_result', function(data) {
+            addConsoleOutput(`[${data.client_id}] ${data.command}`);
+            addConsoleOutput(data.result, data.exit_code === 0 ? 'success' : 'error');
+        });
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function loadClients() {
+            try {
+                const response = await fetch('/api/clients');
+                clients = await response.json();
+                renderClients();
+                updateConsoleClientOptions();
+            } catch (error) {
+                console.error('Error loading clients:', error);
+            }
+        }
+
+        function renderClients() {
+            const clientsList = document.getElementById('clients-list');
+            clientsList.innerHTML = '';
+
+            clients.forEach(client => {
+                const clientCard = document.createElement('div');
+                clientCard.className = 'client-card';
+                clientCard.innerHTML = `
+                    <div class="client-status ${client.status}">${client.status.toUpperCase()}</div>
+                    <h3>${client.hostname}</h3>
+                    <p><strong>ID:</strong> ${client.client_id}</p>
+                    <p><strong>OS:</strong> ${client.os_info}</p>
+                    <p><strong>Last Seen:</strong> ${new Date(client.last_seen).toLocaleString()}</p>
+                `;
+                clientsList.appendChild(clientCard);
+            });
+        }
+
+        function updateConsoleClientOptions() {
+            const select = document.getElementById('console-client');
+            select.innerHTML = '<option value="">Select a client...</option>';
+            
+            clients.forEach(client => {
+                const option = document.createElement('option');
+                option.value = client.client_id;
+                option.textContent = `${client.hostname} (${client.client_id})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function loadCommands() {
+            try {
+                const response = await fetch('/api/commands');
+                commands = await response.json();
+                renderCommands();
+            } catch (error) {
+                console.error('Error loading commands:', error);
+            }
+        }
+
+        function renderCommands() {
+            const commandsList = document.getElementById('commands-list');
+            commandsList.innerHTML = '';
+
+            commands.forEach(command => {
+                const commandItem = document.createElement('div');
+                commandItem.className = 'command-item';
+                commandItem.innerHTML = `
+                    <h4>${command.name}</h4>
+                    <code>${command.command}</code>
+                    <p>${command.description}</p>
+                    <div class="execute-form">
+                        <select id="client-${command.id}">
+                            <option value="">Select client...</option>
+                            ${clients.map(client => `<option value="${client.client_id}">${client.hostname}</option>`).join('')}
+                        </select>
+                        <button class="btn" onclick="executeStoredCommand(${command.id})">Execute</button>
+                    </div>
+                `;
+                commandsList.appendChild(commandItem);
+            });
+        }
+
+        async function loadScripts() {
+            try {
+                const response = await fetch('/api/scripts');
+                scripts = await response.json();
+                renderScripts();
+            } catch (error) {
+                console.error('Error loading scripts:', error);
+            }
+        }
+
+        function renderScripts() {
+            const scriptsList = document.getElementById('scripts-list');
+            scriptsList.innerHTML = '';
+
+            scripts.forEach(script => {
+                const scriptItem = document.createElement('div');
+                scriptItem.className = 'command-item';
+                scriptItem.innerHTML = `
+                    <h4>${script.name} (${script.language})</h4>
+                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; max-height: 200px; overflow-y: auto;">${script.content}</pre>
+                    <p>${script.description}</p>
+                    <div class="execute-form">
+                        <select id="script-client-${script.id}">
+                            <option value="">Select client...</option>
+                            ${clients.map(client => `<option value="${client.client_id}">${client.hostname}</option>`).join('')}
+                        </select>
+                        <button class="btn" onclick="executeScript(${script.id})">Execute</button>
+                    </div>
+                `;
+                scriptsList.appendChild(scriptItem);
+            });
+        }
+
+        async function loadFiles() {
+            try {
+                const response = await fetch('/api/files');
+                files = await response.json();
+                renderFiles();
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
+        }
+
+        function renderFiles() {
+            const filesList = document.getElementById('files-list');
+            filesList.innerHTML = '';
+
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div>
+                        <strong>${file.name}</strong>
+                        <span>${formatFileSize(file.size)}</span>
+                    </div>
+                    <div>
+                        <button class="btn" onclick="downloadFile(${file.id})">Download</button>
+                        <button class="btn btn-danger" onclick="deleteFile(${file.id})">Delete</button>
+                    </div>
+                `;
+                filesList.appendChild(fileItem);
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        async function saveCommand(e) {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('command-name').value,
+                command: document.getElementById('command-text').value,
+                description: document.getElementById('command-desc').value
+            };
+
+            try {
+                const response = await fetch('/api/commands', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    document.getElementById('command-form').reset();
+                    loadCommands();
+                }
+            } catch (error) {
+                console.error('Error saving command:', error);
+            }
+        }
+
+        async function saveScript(e) {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('script-name').value,
+                language: document.getElementById('script-language').value,
+                content: document.getElementById('script-content').value,
+                description: document.getElementById('script-desc').value
+            };
+
+            try {
+                const response = await fetch('/api/scripts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    document.getElementById('script-form').reset();
+                    loadScripts();
+                }
+            } catch (error) {
+                console.error('Error saving script:', error);
+            }
+        }
+
+        async function uploadFiles(e) {
+            const files = e.target.files;
+            
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        loadFiles();
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                }
+            }
+        }
+
+        function downloadFile(fileId) {
+            window.open(`/api/files/${fileId}`, '_blank');
+        }
+
+        async function executeCommand() {
+            const clientId = document.getElementById('console-client').value;
+            const command = document.getElementById('console-command').value;
+
+            if (!clientId || !command) {
+                alert('Please select a client and enter a command');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        command: command
+                    })
+                });
+
+                if (response.ok) {
+                    addConsoleOutput(`Executing: ${command}`);
+                    document.getElementById('console-command').value = '';
+                }
+            } catch (error) {
+                console.error('Error executing command:', error);
+            }
+        }
+
+        async function executeStoredCommand(commandId) {
+            const clientId = document.getElementById(`client-${commandId}`).value;
+            const command = commands.find(c => c.id === commandId);
+
+            if (!clientId) {
+                alert('Please select a client');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        command: command.command
+                    })
+                });
+
+                if (response.ok) {
+                    addConsoleOutput(`Executing: ${command.command}`);
+                }
+            } catch (error) {
+                console.error('Error executing command:', error);
+            }
+        }
+
+        async function executeScript(scriptId) {
+            const clientId = document.getElementById(`script-client-${scriptId}`).value;
+            const script = scripts.find(s => s.id === scriptId);
+
+            if (!clientId) {
+                alert('Please select a client');
+                return;
+            }
+
+            let command;
+            switch (script.language) {
+                case 'python':
+                    command = `python3 -c "${script.content.replace(/"/g, '\\"')}"`;
+                    break;
+                case 'bash':
+                    command = script.content;
+                    break;
+                case 'powershell':
+                    command = `powershell -Command "${script.content.replace(/"/g, '\\"')}"`;
+                    break;
+                default:
+                    command = script.content;
+            }
+
+            try {
+                const response = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        client_id: clientId,
+                        command: command
+                    })
+                });
+
+                if (response.ok) {
+                    addConsoleOutput(`Executing script: ${script.name}`);
+                }
+            } catch (error) {
+                console.error('Error executing script:', error);
+            }
+        }
+
+        function addConsoleOutput(text, type = 'normal') {
+            const console = document.getElementById('console-output');
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
+        }
+
+        // Auto-refresh clients every 30 seconds
+        setInterval(loadClients, 30000);
+    </script>
+</body>
+</html>
