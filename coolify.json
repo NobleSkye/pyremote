@@ -1,0 +1,44 @@
+{
+  "name": "Remote Command Server",
+  "description": "Web-based remote command execution system with SSH disguise",
+  "type": "docker-compose",
+  "domains": ["remote-command.yourdomain.com"],
+  "env": {
+    "FLASK_ENV": "production",
+    "FLASK_DEBUG": "false",
+    "FLASK_HOST": "0.0.0.0",
+    "FLASK_PORT": "5000",
+    "DB_PATH": "/app/data/remote_commands.db",
+    "LOG_FILE": "/app/logs/app.log"
+  },
+  "ports": [
+    {
+      "internal": 5000,
+      "external": 5000,
+      "protocol": "http"
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "mount": "/app/data"
+    },
+    {
+      "name": "logs",
+      "mount": "/app/logs"
+    }
+  ],
+  "healthcheck": {
+    "path": "/",
+    "interval": "30s",
+    "timeout": "10s",
+    "retries": 3
+  },
+  "labels": {
+    "traefik.enable": "true",
+    "traefik.http.routers.remote-command.rule": "Host(`remote-command.yourdomain.com`)",
+    "traefik.http.routers.remote-command.tls": "true",
+    "traefik.http.routers.remote-command.tls.certresolver": "letsencrypt",
+    "traefik.http.services.remote-command.loadbalancer.server.port": "5000"
+  }
+}

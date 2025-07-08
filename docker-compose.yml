@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  remote-command-server:
+    build: .
+    container_name: remote-command-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=false
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - remote-command-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.remote-command.rule=Host(`remote-command.yourdomain.com`)"
+      - "traefik.http.routers.remote-command.tls=true"
+      - "traefik.http.routers.remote-command.tls.certresolver=letsencrypt"
+      - "traefik.http.services.remote-command.loadbalancer.server.port=5000"
+      - "coolify.managed=true"
+
+networks:
+  remote-command-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+  logs:
+    driver: local

