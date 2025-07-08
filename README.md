@@ -378,3 +378,8 @@ FLASK_PORT=5000
 DB_PATH=/app/data/remote_commands.db
 LOG_FILE=/app/logs/app.log
 ```
+
+
+
+# Disclaimer
+this is ai generated cuz i just wanted to test the idea to see if it was possible
